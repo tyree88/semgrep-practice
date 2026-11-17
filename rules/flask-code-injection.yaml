@@ -1,0 +1,22 @@
+rules:
+  - id: flask-code-injection
+    mode: taint
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Flask request data reaches `$SINK()`, which runs arbitrary Python.
+      Use ast.literal_eval() for literals or a real parser.
+    metadata:
+      category: security
+      cwe: "CWE-95: Eval Injection"
+      owasp: "A03:2021 - Injection"
+      confidence: HIGH
+    pattern-sources:
+      - pattern: flask.request.$ANY
+    pattern-sinks:
+      - patterns:
+          - pattern-inside: $SINK($CODE, ...)
+          - metavariable-regex:
+              metavariable: $SINK
+              regex: ^(eval|exec|compile)$
+          - focus-metavariable: $CODE

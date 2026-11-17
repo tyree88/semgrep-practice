@@ -1,0 +1,23 @@
+[project]
+name = "semgrep-practice"
+version = "0.1.0"
+description = "Intentionally vulnerable Flask app for practicing Semgrep rules and SAST/SCA pipeline design"
+requires-python = ">=3.12"
+dependencies = [
+    "flask>=3.0,<4",
+    "pyyaml>=6.0,<7",
+    # Pinned to a vulnerable release ON PURPOSE so dependency scanners have something to find
+    # (e.g. CVE-2024-35195, CVE-2024-47081). Exercise: bump to the latest release, run
+    # `uv lock`, and watch the findings clear.
+    "requests==2.31.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

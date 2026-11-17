@@ -1,0 +1,23 @@
+rules:
+  - id: flask-path-traversal
+    mode: taint
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Flask request data builds a file path. `../` can escape the intended
+      directory. Use werkzeug.utils.safe_join() and check for None.
+    metadata:
+      category: security
+      cwe: "CWE-22: Path Traversal"
+      owasp: "A01:2021 - Broken Access Control"
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern: flask.request.$ANY
+    pattern-sanitizers:
+      - pattern: werkzeug.utils.safe_join(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: open($PATH, ...)
+              - pattern-inside: flask.send_file($PATH, ...)
+          - focus-metavariable: $PATH

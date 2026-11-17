@@ -1,0 +1,35 @@
+rules:
+  - id: flask-ssrf
+    mode: taint
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Flask request data controls the URL of an outbound request (SSRF).
+      Map user input to an allowlist of fixed URLs instead.
+    metadata:
+      category: security
+      cwe: "CWE-918: Server-Side Request Forgery"
+      owasp: "A10:2021 - Server-Side Request Forgery"
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern: flask.request.$ANY
+    pattern-sanitizers:
+      # Design tradeoff: Semgrep cannot prove a dict is a fixed allowlist, so we
+      # trust a naming convention. Rename the dict and the rule fires again.
+      - patterns:
+          - pattern: $MAP[...]
+          - metavariable-regex:
+              metavariable: $MAP
+              regex: ^ALLOWED(_[A-Z0-9_]+)?$
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: urllib.request.urlopen($URL, ...)
+              - patterns:
+                  - pattern-inside: requests.$METHOD($URL, ...)
+                  - metavariable-regex:
+                      metavariable: $METHOD
+                      regex: ^(get|post|put|patch|delete|head|options)$
+              - pattern-inside: requests.request($M, $URL, ...)
+              - pattern-inside: requests.$F(..., url=$URL, ...)
+          - focus-metavariable: $URL

@@ -1,0 +1,20 @@
+rules:
+  - id: requests-verify-disabled
+    languages: [python]
+    severity: ERROR
+    message: >-
+      TLS certificate checks are off (verify=False), so anyone on the network
+      path can read or change this traffic. Remove verify=False, or pass
+      verify="/path/to/ca-bundle.pem" for a private CA. With requests<2.32,
+      verify=False on a Session also sticks to later requests (CVE-2024-35195).
+    metadata:
+      category: security
+      cwe: "CWE-295: Improper Certificate Validation"
+      owasp: "A02:2021 - Cryptographic Failures"
+      confidence: HIGH
+      references:
+        - https://github.com/advisories/GHSA-9wx4-h78v-vm56
+    pattern-either:
+      - pattern: requests.$METHOD(..., verify=False, ...)
+      - pattern: $SESSION.$METHOD(..., verify=False, ...)
+      - pattern: $SESSION.verify = False

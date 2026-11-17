@@ -1,0 +1,113 @@
+name: semgrep
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SEMGREP_SEND_METRICS: "off"
+
+jobs:
+  # Gate 1: the rules themselves are code. Validate syntax, run the
+  # ruleid/ok unit tests, and check each rule against the practice app.
+  rule-tests:
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep:latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate rule syntax
+        run: semgrep scan --validate --config rules/
+      - name: Rule unit tests (ruleid / ok annotations)
+        run: semgrep --test rules/
+      - name: Every rule fires on vulnerable.py, none on fixed.py
+        run: semgrep scan --config rules/ app/ --json --quiet | python3 scripts/check_coverage.py
+
+  # Gate 2: the fixed app really blocks the attacks.
+  app-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v10.3.3
+      - name: Lockfile matches pyproject.toml
+        run: uv lock --check
+      - run: uv sync --frozen
+      - run: uv run --frozen pytest -q
+
+  # Report only: known CVEs in locked dependencies (free, no account needed).
+  # requests is pinned to a vulnerable version on purpose, so the audit step
+  # always finds something; continue-on-error keeps it from failing the run.
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uv export --frozen --no-dev --format requirements-txt -o requirements.lock.txt
+      - name: pip-audit
+        continue-on-error: true
+        run: |
+          uvx pip-audit -r requirements.lock.txt --no-deps --disable-pip \
+            --progress-spinner off --format markdown >> "$GITHUB_STEP_SUMMARY"
+
+  # Gate 3 (PRs only): block on NEW findings from our high-confidence custom
+  # rules. Findings that already exist on the base branch do not fail the PR.
+  pr-gate:
+    if: github.event_name == 'pull_request'
+    needs: rule-tests
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep:latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Diff-aware scan against the PR base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          semgrep scan --config rules/ --baseline-commit "$BASE_SHA" --error
+
+  # Report only: custom rules + the public p/python ruleset, as SARIF, to the
+  # GitHub Security tab. app/vulnerable.py always has findings, so this job
+  # never fails the build.
+  full-scan:
+    needs: rule-tests
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep:latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Scan
+        run: semgrep scan --config rules/ --config p/python --sarif --output semgrep.sarif
+      - name: Upload SARIF to code scanning
+        # Fork PRs get a read-only token, so the upload would fail there.
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  # Optional: Semgrep AppSec Platform. Add a SEMGREP_APP_TOKEN repo secret to
+  # turn this on. With no token (or on fork PRs) the step skips. If Supply
+  # Chain is enabled for your org, `semgrep ci` also reads uv.lock and reports
+  # whether the vulnerable requests code paths are reachable from app/.
+  semgrep-platform:
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep:latest
+    env:
+      SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: semgrep ci
+        if: env.SEMGREP_APP_TOKEN != ''
+        run: semgrep ci
