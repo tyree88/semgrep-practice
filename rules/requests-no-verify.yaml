@@ -1,0 +1,9 @@
+rules:
+  - id: requests-no-verify
+    # $METHOD matches get, post, put, ... and "..." matches any other arguments.
+    pattern: requests.$METHOD(..., verify=False, ...)
+    message: verify=False turns off HTTPS certificate checks, so traffic can be read or changed. Remove it.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      cwe: "CWE-295: Improper Certificate Validation"

@@ -1,9 +1,3 @@
-# Replaces Semgrep's default ignore list, so the defaults are repeated here.
-.git/
-.venv/
-venv/
-__pycache__/
-node_modules/
-# Rule test fixtures are vulnerable on purpose; `semgrep --test` still reads them.
+# Rule test files contain vulnerable code on purpose. `semgrep --test` still reads them.
 rules/
-tests/
+.venv/

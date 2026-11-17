@@ -1,0 +1,13 @@
+rules:
+  - id: command-injection
+    # "patterns" means ALL of these must be true.
+    patterns:
+      # Any subprocess call ($FUNC = run, call, Popen, ...) with shell=True ...
+      - pattern: subprocess.$FUNC($CMD, ..., shell=True, ...)
+      # ... unless the command is a fixed string, which can't contain user input.
+      - pattern-not: subprocess.$FUNC("...", ..., shell=True, ...)
+    message: shell=True with a built-up command lets attackers run their own commands. Pass a list like ["ping", "-c", "1", host] and drop shell=True.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-78: OS Command Injection"

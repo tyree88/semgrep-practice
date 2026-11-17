@@ -1,7 +1,4 @@
 __pycache__/
-*.pyc
 .venv/
-venv/
-.pytest_cache/
-semgrep.sarif
-requirements.lock.txt
+# Local editor settings (holds a full path on your machine)
+.vscode/

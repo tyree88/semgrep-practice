@@ -1,0 +1,16 @@
+rules:
+  - id: sql-injection
+    # Taint mode: follow data from a source to a sink, even through variables.
+    mode: taint
+    pattern-sources:
+      - pattern: flask.request.$ANYTHING      # anything the user sends
+    pattern-sinks:
+      - patterns:
+          - pattern: $DB.execute($QUERY, ...)
+          # Only the SQL text is dangerous; the (name,) values tuple is the safe way.
+          - focus-metavariable: $QUERY
+    message: User input goes straight into SQL. Use a placeholder instead, like execute("... WHERE name = ?", (name,)).
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-89: SQL Injection"
